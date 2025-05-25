@@ -952,7 +952,7 @@ void felix86_fpatan(ThreadState* state) {
     double st0, st1;
     memcpy(&st0, &state->fp[0], sizeof(double));
     memcpy(&st1, &state->fp[1], sizeof(double));
-    double result = ::atan(st1 / st0);
+    double result = ::atan2(st1, st0);
     memcpy(&state->fp[1], &result, sizeof(double));
 }
 
