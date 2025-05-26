@@ -267,10 +267,11 @@ void setupFrame(RegisteredSignal& signal, int sig, ThreadState* state, const u64
     frame->uc.uc_mcontext.fpregs->xmm[14] = state->GetXmm(X86_REF_XMM14);
     frame->uc.uc_mcontext.fpregs->xmm[15] = state->GetXmm(X86_REF_XMM15);
 
-    int top = state->fpu_top;
+    bool is_mmx = (x87State)state->x87_state == x87State::MMX;
     for (int i = 0; i < 8; i++) {
-        x64_fpxreg* reg = &frame->uc.uc_mcontext.fpregs->_st[(top + i) & 0b111];
-        if (state->x87_state == x87State::MMX) {
+        // TODO: verify that these aren't saved relative to TOP when using x87
+        x64_fpxreg* reg = &frame->uc.uc_mcontext.fpregs->_st[i];
+        if (is_mmx) {
             memcpy(reg, &state->fp[i], sizeof(u64));
             reg->exponent = 0xFFFF; // according to Intel manual MMX instructions set these to 1's
         } else {
@@ -335,24 +336,38 @@ void Signals::sigreturn(ThreadState* state) {
     state->SetFlag(X86_REF_SF, sf);
     state->SetFlag(X86_REF_OF, of);
 
-    state->SetXmm(X86_REF_XMM0, frame->uc.uc_mcontext.fpregs->xmm[0]);
-    state->SetXmm(X86_REF_XMM1, frame->uc.uc_mcontext.fpregs->xmm[1]);
-    state->SetXmm(X86_REF_XMM2, frame->uc.uc_mcontext.fpregs->xmm[2]);
-    state->SetXmm(X86_REF_XMM3, frame->uc.uc_mcontext.fpregs->xmm[3]);
-    state->SetXmm(X86_REF_XMM4, frame->uc.uc_mcontext.fpregs->xmm[4]);
-    state->SetXmm(X86_REF_XMM5, frame->uc.uc_mcontext.fpregs->xmm[5]);
-    state->SetXmm(X86_REF_XMM6, frame->uc.uc_mcontext.fpregs->xmm[6]);
-    state->SetXmm(X86_REF_XMM7, frame->uc.uc_mcontext.fpregs->xmm[7]);
-    state->SetXmm(X86_REF_XMM8, frame->uc.uc_mcontext.fpregs->xmm[8]);
-    state->SetXmm(X86_REF_XMM9, frame->uc.uc_mcontext.fpregs->xmm[9]);
-    state->SetXmm(X86_REF_XMM10, frame->uc.uc_mcontext.fpregs->xmm[10]);
-    state->SetXmm(X86_REF_XMM11, frame->uc.uc_mcontext.fpregs->xmm[11]);
-    state->SetXmm(X86_REF_XMM12, frame->uc.uc_mcontext.fpregs->xmm[12]);
-    state->SetXmm(X86_REF_XMM13, frame->uc.uc_mcontext.fpregs->xmm[13]);
-    state->SetXmm(X86_REF_XMM14, frame->uc.uc_mcontext.fpregs->xmm[14]);
-    state->SetXmm(X86_REF_XMM15, frame->uc.uc_mcontext.fpregs->xmm[15]);
+    if (!g_no_riscv_v_state) {
+        state->SetXmm(X86_REF_XMM0, frame->uc.uc_mcontext.fpregs->xmm[0]);
+        state->SetXmm(X86_REF_XMM1, frame->uc.uc_mcontext.fpregs->xmm[1]);
+        state->SetXmm(X86_REF_XMM2, frame->uc.uc_mcontext.fpregs->xmm[2]);
+        state->SetXmm(X86_REF_XMM3, frame->uc.uc_mcontext.fpregs->xmm[3]);
+        state->SetXmm(X86_REF_XMM4, frame->uc.uc_mcontext.fpregs->xmm[4]);
+        state->SetXmm(X86_REF_XMM5, frame->uc.uc_mcontext.fpregs->xmm[5]);
+        state->SetXmm(X86_REF_XMM6, frame->uc.uc_mcontext.fpregs->xmm[6]);
+        state->SetXmm(X86_REF_XMM7, frame->uc.uc_mcontext.fpregs->xmm[7]);
+        state->SetXmm(X86_REF_XMM8, frame->uc.uc_mcontext.fpregs->xmm[8]);
+        state->SetXmm(X86_REF_XMM9, frame->uc.uc_mcontext.fpregs->xmm[9]);
+        state->SetXmm(X86_REF_XMM10, frame->uc.uc_mcontext.fpregs->xmm[10]);
+        state->SetXmm(X86_REF_XMM11, frame->uc.uc_mcontext.fpregs->xmm[11]);
+        state->SetXmm(X86_REF_XMM12, frame->uc.uc_mcontext.fpregs->xmm[12]);
+        state->SetXmm(X86_REF_XMM13, frame->uc.uc_mcontext.fpregs->xmm[13]);
+        state->SetXmm(X86_REF_XMM14, frame->uc.uc_mcontext.fpregs->xmm[14]);
+        state->SetXmm(X86_REF_XMM15, frame->uc.uc_mcontext.fpregs->xmm[15]);
 
-    // TODO: restore x87 state (needs storing/restoring fsw)
+        for (int i = 0; i < 8; i++) {
+            x64_fpxreg* reg = &frame->uc.uc_mcontext.fpregs->_st[i];
+            if (reg->exponent == 0xFFFF) {
+                memcpy(&state->fp[i], reg->significand, sizeof(u64));
+            } else {
+                double f64 = f80_to_64((Float80*)reg);
+                memcpy(&state->fp[i], &f64, sizeof(u64));
+            }
+        }
+    } else {
+        // Don't set the state, because the frame isn't going to have correct
+        // values. Most things shouldn't modify the values of registers in signal handlers.
+        // But if they do, and you need support for that, update your kernel.
+    }
 
     // Restore signal mask to what it was supposed to be outside of signal handler
     sigset_t host_mask;
@@ -423,23 +438,6 @@ riscv_v_state* get_riscv_vector_state(void* ctx) {
 #endif
 }
 
-// Gets the vector state from the frame, only for recentish Linux kernels
-std::optional<std::array<XmmReg, 32>> get_vector_state(void* ctx) {
-    riscv_v_state* v_state = get_riscv_vector_state(ctx);
-    if (!v_state) {
-        return std::nullopt;
-    }
-
-    u8* datap = (u8*)v_state->datap;
-    std::array<XmmReg, 32> xmm_regs;
-    for (int i = 0; i < 32; i++) {
-        xmm_regs[i] = *(XmmReg*)datap;
-        datap += v_state->vlenb;
-    }
-
-    return xmm_regs;
-}
-
 bool handle_smc(ThreadState* current_state, siginfo_t* info, ucontext_t* context, u64 pc) {
     if (!is_in_jit_code(current_state, (u8*)pc)) {
         WARN("We hit a SIGSEGV ACCERR but PC is not in JIT code...");
@@ -486,6 +484,19 @@ bool handle_wild_sigsegv(ThreadState* current_state, siginfo_t* info, ucontext_t
     PLAIN("I have been hit by a wild SIGSEGV! My TID is %d, you have 40 seconds to attach gdb using `gdb -p %d` to find out why! If you think this "
           "SIGSEGV was intended, disabled this mode by unsetting the `capture_sigsegv` option.",
           pid, pid);
+
+    LOG("Current RIP:");
+    if (is_in_jit_code(current_state, (u8*)pc)) {
+        BlockMetadata* current_block = get_block_metadata(current_state, pc);
+        u64 actual_rip = get_actual_rip(*current_block, pc);
+        print_address(actual_rip);
+    } else {
+        print_address(current_state->rip);
+    }
+
+    if (g_config.calltrace) {
+        dump_states();
+    }
     ::sleep(40);
     return true;
 }
@@ -583,15 +594,24 @@ bool dispatch_guest(int sig, siginfo_t* info, void* ctx) {
 
     u64* gprs = get_regs(ctx);
     u64* fprs = get_fprs(ctx);
-    auto host_vecs = get_vector_state(ctx);
-    if (host_vecs) {
-        // Xmms start at the first allocated register, xmm0-xmm15 are allocated to sequential host registers so we are fine
-        xmms = &(*host_vecs)[Recompiler::allocatedVec(X86_REF_XMM0).Index()];
+    std::array<XmmReg, 32> xmm_regs;
+
+    riscv_v_state* v_state = get_riscv_vector_state(ctx);
+    if (v_state) {
+        u8* datap = (u8*)v_state->datap;
+        for (int i = 0; i < 32; i++) {
+            xmm_regs[i] = *(XmmReg*)datap;
+            datap += v_state->vlenb;
+        }
     } else {
-        // In the chance that this is an old kernel and we couldn't get the vector state in the signal handler, let's at least
-        // get the most recent state we are aware of, from before entering the block
-        xmms = state->xmm;
+        // In the chance that this is an old kernel and we couldn't get the vector state in the signal handler,
+        // the xmm values in the signal handler are going to be wrong. Most thing shouldn't care about this
+        // so we aren't going to do anything here
+        g_no_riscv_v_state = true;
+        WARN_ONCE("You have an old kernel with no vector state in signal handlers, this may cause problems in some programs");
     }
+
+    xmms = xmm_regs.data();
 
     bool use_altstack = handler->flags & SA_ONSTACK;
     if (use_altstack && state->alt_stack.ss_sp == 0) {
@@ -637,6 +657,8 @@ bool dispatch_guest(int sig, siginfo_t* info, void* ctx) {
         handler->func = (u64)SIG_DFL;
     }
 
+    u64 old_rip = state->GetRip();
+
     // Eventually, this should return right after this call and have the correct state.
     // When entering the dispatcher, the host state is saved in the host stack
     // sigreturn will call exitDispatcher, which will load the old frame and return back here after this call.
@@ -648,6 +670,7 @@ bool dispatch_guest(int sig, siginfo_t* info, void* ctx) {
     if (in_jit_code) {
         // We are returning to JIT code. We need to set the host registers from the ucontext accordingly,
         // as they may have been changed in the signal handler.
+        // TODO: we also need to set xmms, sts, flags too...
         u64* regs = get_regs(ctx);
         for (int i = 0; i < 16; i++) {
             x86_ref_e ref = (x86_ref_e)(X86_REF_RAX + i);
@@ -655,8 +678,18 @@ bool dispatch_guest(int sig, siginfo_t* info, void* ctx) {
             regs[Recompiler::allocatedGPR(ref).Index()] = new_value;
         }
 
-        // TODO: If signal handler changes REG_RIP, we are screwed with this implementation
-        // We need to jump back to the dispatcher if this is the case
+        // If the signal handler changed our RIP we need to go back to the dispatcher to compile a new block
+        // Otherwise we will continue where we left off when the signal happened
+        u64 new_rip = state->GetRip();
+        if (new_rip != old_rip) {
+#ifdef __riscv
+            regs[3] = new_rip;
+            static_assert(Recompiler::allocatedGPR(X86_REF_RIP) == biscuit::gp);
+            static_assert(biscuit::gp.Index() == 3);
+            WARN("Signal handler changed RIP from %lx to %lx", old_rip, new_rip);
+#endif
+            set_pc(ctx, state->recompiler->getCompileNext());
+        }
     }
 
     return true;

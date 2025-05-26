@@ -837,6 +837,14 @@ FAST_HANDLE(HLT) {
     rec.stopCompiling();
 }
 
+FAST_HANDLE(UD2) {
+    WARN_ONCE("UD2 instruction being compiled?");
+
+    // UD2 will trigger SIGILL, so we need to do the same
+    as.C_UNDEF();
+    rec.stopCompiling();
+}
+
 FAST_HANDLE(CALL) {
     rec.pushCalltrace();
 
@@ -6238,7 +6246,6 @@ void SCALAR(Recompiler& rec, u64 rip, Assembler& as, ZydisDecodedInstruction& in
 }
 
 FAST_HANDLE(EMMS) {
-    rec.moveMMXToX87();
     rec.switchToX87();
 }
 
