@@ -561,6 +561,11 @@ void felix86_psadbw(u8* dst, u8* src) {
 }
 
 void dump_states() {
+    if (!g_config.calltrace) {
+        printf("Enable FELIX86_CALLTRACE to see the calltrace\n");
+        return;
+    }
+
     auto lock = g_process_globals.states_lock.lock();
     auto& states = g_process_globals.states;
     int i = 0;
@@ -599,7 +604,6 @@ void update_symbols() {
         if (result == 3) {
             if (!std::filesystem::is_regular_file(buffer)) {
                 // Not a regular file, perhaps something like /dev/zero, so we don't add it
-                VERBOSE("Buffer: %s is not regular file", buffer);
                 continue;
             }
 
@@ -615,7 +619,6 @@ void update_symbols() {
             }
 
             if (it == regions.end()) {
-                VERBOSE("Adding new mapping: %s", buffer);
                 regions[buffer] = {UINT64_MAX, 0};
             }
 
@@ -624,10 +627,8 @@ void update_symbols() {
             u64 new_end = std::max(region.second, end);
             region.first = new_start;
             region.second = new_end;
-            VERBOSE("Mapping %s extended: %lx-%lx", buffer, new_start, new_end);
         } else {
             // Failed to parse, is not a map line with a path, skip
-            VERBOSE("While reading mappings, failed to parse line: %s", line.c_str());
         }
     }
 

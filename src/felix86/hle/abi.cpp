@@ -148,6 +148,9 @@ void GuestToHostMarshaller::emitPrologue(biscuit::Assembler& as) {
     ASSERT(signature.size() >= 2);
     ASSERT(signature[1] == '_');
 
+    as.LI(t5, 1);
+    as.SB(t5, offsetof(ThreadState, signals_disabled), Recompiler::threadStatePointer());
+
 #if 0
     biscuit::Label after;
     as.MV(a0, s11);
@@ -417,6 +420,8 @@ void GuestToHostMarshaller::emitEpilogue(biscuit::Assembler& as) {
     if (stack_size != 0) {
         as.ADDI(sp, sp, stack_size);
     }
+
+    as.SB(x0, offsetof(ThreadState, signals_disabled), Recompiler::threadStatePointer());
 }
 
 void enter_dispatcher_for_callback(ThreadState* state) {
@@ -428,7 +433,7 @@ void enter_dispatcher_for_callback(ThreadState* state) {
     VERBOSE("Finished callback %p", rip);
 }
 
-void* ABIMadness::hostToGuestTrampoline(const char* signature, void* guest_function) {
+void* ABIMadness::hostToGuestTrampoline(const char* signature, const void* guest_function) {
     // We need custom guest code and custom host code
     ThreadState* state = ThreadState::Get();
     state->signals_disabled = true;
@@ -474,7 +479,46 @@ void* ABIMadness::hostToGuestTrampoline(const char* signature, void* guest_funct
     biscuit::GPR guest_stack_pointer = t1;
 
     // ThreadState* in s11, RSP in t1
-    as.LI(thread_state_pointer, (u64)state);
+    // This is yucky... we need to store all of our saved registers to get the ThreadState at runtime
+    // We can't just call ThreadState::Get because it will ruin our arguments.
+    as.ADDI(sp, sp, -16 * 8);
+    as.SD(a0, 0 * 8, sp);
+    as.SD(a1, 1 * 8, sp);
+    as.SD(a2, 2 * 8, sp);
+    as.SD(a3, 3 * 8, sp);
+    as.SD(a4, 4 * 8, sp);
+    as.SD(a5, 5 * 8, sp);
+    as.SD(a6, 6 * 8, sp);
+    as.SD(a7, 7 * 8, sp);
+    as.FSD(fa0, 8 * 8, sp);
+    as.FSD(fa1, 9 * 8, sp);
+    as.FSD(fa2, 10 * 8, sp);
+    as.FSD(fa3, 11 * 8, sp);
+    as.FSD(fa4, 12 * 8, sp);
+    as.FSD(fa5, 13 * 8, sp);
+    as.FSD(fa6, 14 * 8, sp);
+    as.FSD(fa7, 15 * 8, sp);
+    as.LI(t1, (u64)ThreadState::Get);
+    as.JALR(t1);
+    as.MV(thread_state_pointer, a0);
+    as.LD(a0, 0 * 8, sp);
+    as.LD(a1, 1 * 8, sp);
+    as.LD(a2, 2 * 8, sp);
+    as.LD(a3, 3 * 8, sp);
+    as.LD(a4, 4 * 8, sp);
+    as.LD(a5, 5 * 8, sp);
+    as.LD(a6, 6 * 8, sp);
+    as.LD(a7, 7 * 8, sp);
+    as.FLD(fa0, 8 * 8, sp);
+    as.FLD(fa1, 9 * 8, sp);
+    as.FLD(fa2, 10 * 8, sp);
+    as.FLD(fa3, 11 * 8, sp);
+    as.FLD(fa4, 12 * 8, sp);
+    as.FLD(fa5, 13 * 8, sp);
+    as.FLD(fa6, 14 * 8, sp);
+    as.FLD(fa7, 15 * 8, sp);
+    as.ADDI(sp, sp, 16 * 8);
+
     as.LD(guest_stack_pointer, offsetof(ThreadState, gprs) + (X86_REF_RSP - X86_REF_RAX) * 8, thread_state_pointer);
 
     // Marshal host arguments to guest arguments
@@ -576,7 +620,7 @@ void* ABIMadness::hostToGuestTrampoline(const char* signature, void* guest_funct
 
     ASSERT(x86_stack_size == x86_stack_offset);
 
-    // Save old RIP, set new RIP
+    // Save old RIP, set new RIP -- TODO: why do we even save the old rip? delete this
     as.LD(s10, offsetof(ThreadState, rip), thread_state_pointer);
     as.LI(t0, (u64)x86_code);
     as.SD(t0, offsetof(ThreadState, rip), thread_state_pointer);
@@ -599,8 +643,31 @@ void* ABIMadness::hostToGuestTrampoline(const char* signature, void* guest_funct
         as.SD(guest_stack_pointer, offsetof(ThreadState, gprs) + (X86_REF_RSP - X86_REF_RAX) * 8, thread_state_pointer);
     }
 
-    // Return values not supported yet, but we can just load a0 from RAX
-    ASSERT(signature[0] == 'v');
+    // Load the return value from the state struct to a RISC-V register
+    char return_type = signature[0];
+    switch (return_type) {
+    case 'd': {
+        // RAX
+        as.LW(a0, offsetof(ThreadState, gprs), thread_state_pointer);
+        break;
+    }
+    case 'q': {
+        // RAX
+        as.LD(a0, offsetof(ThreadState, gprs), thread_state_pointer);
+        break;
+    }
+    case 'D': {
+        // XMM0
+        as.FLD(fa0, offsetof(ThreadState, xmm), thread_state_pointer);
+        break;
+    }
+    case 'v': {
+        break;
+    }
+    default: {
+        UNIMPLEMENTED();
+    }
+    }
 
     as.LD(s11, 0, sp);
     as.LD(s10, 8, sp);
