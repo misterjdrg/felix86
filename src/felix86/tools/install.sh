@@ -26,7 +26,8 @@ if [ -z "$HOME" ] || [ ! -d "$HOME" ]; then
     exit 1
 fi
 
-FILE="/usr/bin/felix86"
+INSTALLATION_DIR="/opt/felix86"
+FILE="$INSTALLATION_DIR/felix86"
 FELIX86_LINK="https://nightly.link/OFFTKP/felix86/workflows/unit-tests/master/Linux%20executable.zip"
 
 set -e
@@ -63,8 +64,33 @@ unzip -o -d /tmp/felix86_artifact /tmp/felix86_artifact/archive.zip
 rm /tmp/felix86_artifact/archive.zip
 echo "Downloaded"
 echo "Moving felix86 artifact to $FILE, requesting permission..."
+sudo mkdir -p $INSTALLATION_DIR
+
+# Save the old installation in /tmp/felix86_artifact/old.<random> in case the user wants it back
+TEMP_OLD=$(mktemp -d /tmp/felix86_artifact/old.XXXXXX)
+moved_old=0
+if [ -f "/usr/bin/felix86" ]; then
+    sudo mv /usr/bin/felix86 $TEMP_OLD/felix86.link
+    moved_old=1
+fi
+if [ -f "$FILE" ]; then
+    sudo mv $FILE $TEMP_OLD/
+    moved_old=1
+fi
+if [ -d "$INSTALLATION_DIR/lib" ]; then
+    sudo mv $INSTALLATION_DIR/lib $TEMP_OLD/
+    moved_old=1
+fi
+
+if [[ "$moved_old" == "1" ]]; then
+    echo "Moved old felix86 installation to $TEMP_OLD"
+fi
+
 sudo mv /tmp/felix86_artifact/felix86 $FILE
-echo "Successfully installed felix86 at $FILE"
+sudo mv /tmp/felix86_artifact/lib $INSTALLATION_DIR/
+sudo ln -s $FILE /usr/bin/felix86
+echo "Successfully installed felix86 at $FILE and libraries at $INSTALLATION_DIR/lib"
+felix86 --set-thunks $INSTALLATION_DIR/lib
 
 if [[ "$exit_after_install" == "1" ]]; then
     exit
