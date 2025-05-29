@@ -898,8 +898,19 @@ biscuit::GPR Recompiler::getGPR(const ZydisDecodedOperand* operand) {
     }
     case ZYDIS_OPERAND_TYPE_MEMORY: {
         biscuit::GPR dest = scratch();
-        biscuit::GPR address = lea(operand, false);
-        readMemory(dest, address, 0, zydisToSize(operand->size));
+        u64 immediate = operand->mem.disp.value;
+        if (IsValidSigned12BitImm(immediate) && !(current_instruction->attributes & ZYDIS_ATTRIB_HAS_SEGMENT) &&
+            !g_config.paranoid) { // can't do this with seg+a32
+            // Remove the immediate from the operand and use it in the write memory instruction
+            // This can turn an ADDI+load into just a load if the LEA is just a register
+            ZydisDecodedOperand op = *operand;
+            op.mem.disp.value = 0;
+            biscuit::GPR address = lea(&op, false);
+            readMemory(dest, address, immediate, zydisToSize(operand->size));
+        } else {
+            biscuit::GPR address = lea(operand, false);
+            readMemory(dest, address, 0, zydisToSize(operand->size));
+        }
         return dest;
     }
     case ZYDIS_OPERAND_TYPE_IMMEDIATE: {
@@ -1006,6 +1017,16 @@ biscuit::GPR Recompiler::getGPR(x86_ref_e ref, x86_size_e size) {
 
 bool Recompiler::isGPR(ZydisRegister reg) {
     return zydisToRef(reg) >= X86_REF_RAX && zydisToRef(reg) <= X86_REF_R15;
+}
+
+void Recompiler::vsplat(biscuit::Vec vec, u64 imm) {
+    if (imm <= 0xF) {
+        as.VMV(vec, imm);
+    } else {
+        biscuit::GPR temp = scratch();
+        as.LI(temp, imm);
+        as.VMV(vec, temp);
+    }
 }
 
 biscuit::Vec Recompiler::getVec(x86_ref_e ref) {
@@ -1132,8 +1153,19 @@ void Recompiler::setGPR(const ZydisDecodedOperand* operand, biscuit::GPR reg) {
         break;
     }
     case ZYDIS_OPERAND_TYPE_MEMORY: {
-        biscuit::GPR address = lea(operand, false);
-        writeMemory(reg, address, 0, zydisToSize(operand->size));
+        u64 immediate = operand->mem.disp.value;
+        if (IsValidSigned12BitImm(immediate) && !(current_instruction->attributes & ZYDIS_ATTRIB_HAS_SEGMENT) &&
+            !g_config.paranoid) { // can't do this with seg+a32
+            // Remove the immediate from the operand and use it in the write memory instruction
+            // This can turn an ADDI+store into just a store if the LEA is just a register
+            ZydisDecodedOperand op = *operand;
+            op.mem.disp.value = 0;
+            biscuit::GPR address = lea(&op, false);
+            writeMemory(reg, address, immediate, zydisToSize(operand->size));
+        } else {
+            biscuit::GPR address = lea(operand, false);
+            writeMemory(reg, address, 0, zydisToSize(operand->size));
+        }
         break;
     }
     default: {

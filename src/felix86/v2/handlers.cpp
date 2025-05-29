@@ -336,16 +336,22 @@ FAST_HANDLE(MOV) {
                 rec.setGPR(&operands[0], src);
                 break;
             }
-            case 32: {
-                biscuit::GPR address = rec.lea(&operands[1], false);
-                biscuit::GPR dst = rec.allocatedGPR(rec.zydisToRef(operands[0].reg.value));
-                rec.readMemory(dst, address, 0, X86_SIZE_DWORD);
-                break;
-            }
+            case 32:
             case 64: {
-                biscuit::GPR address = rec.lea(&operands[1], false);
+                u64 immediate = operands[1].mem.disp.value;
                 biscuit::GPR dst = rec.allocatedGPR(rec.zydisToRef(operands[0].reg.value));
-                rec.readMemory(dst, address, 0, X86_SIZE_QWORD);
+                if (IsValidSigned12BitImm(immediate) && !(instruction.attributes & ZYDIS_ATTRIB_HAS_SEGMENT) &&
+                    !g_config.paranoid) { // can't do this with seg+a32
+                    // Remove the immediate from the operand and use it in the write memory instruction
+                    // This can turn an ADDI+load into just a load if the LEA is just a register
+                    ZydisDecodedOperand op = operands[1];
+                    op.mem.disp.value = 0;
+                    biscuit::GPR address = rec.lea(&op, false);
+                    rec.readMemory(dst, address, immediate, rec.zydisToSize(operands[0].size));
+                } else {
+                    biscuit::GPR address = rec.lea(&operands[1], false);
+                    rec.readMemory(dst, address, 0, rec.zydisToSize(operands[0].size));
+                }
                 break;
             }
             default: {
@@ -3036,7 +3042,7 @@ FAST_HANDLE(VECTOR_MOV) {
         int size = operands[0].size;
         ASSERT(operands[0].size == operands[1].size);
         ASSERT(operands[0].size > 64);
-        biscuit::GPR address = rec.lea(&operands[1]);
+        biscuit::GPR address = rec.lea(&operands[1], false);
         rec.readMemory(dst, address, size);
         rec.setVec(&operands[0], dst);
     }
@@ -5001,30 +5007,25 @@ FAST_HANDLE(SHUFPS) {
     u64 el1 = (imm >> 2) & 0b11;
     u64 el2 = (imm >> 4) & 0b11;
     u64 el3 = (imm >> 6) & 0b11;
-    bool all_same = el0 == el1 && el0 == el2 && el0 == el3;
 
     biscuit::Vec iota = rec.scratchVec();
-    biscuit::GPR temp = rec.scratch();
     biscuit::Vec dst = rec.getVec(&operands[0]);
     biscuit::Vec src = rec.getVec(&operands[1]);
-    biscuit::Vec result = rec.scratchVec();
+    biscuit::Vec result1 = rec.scratchVec();
+    biscuit::Vec result2 = rec.scratchVec();
 
-    if (!all_same) {
-        rec.setVectorState(SEW::E64, 1);
-        u64 mask = (el3 << 48) | (el2 << 32) | (el1 << 16) | el0;
-        as.LI(temp, mask);
-        as.VMV_SX(iota, temp);
-    } else {
-        rec.setVectorState(SEW::E16, 4);
-        as.VMV(iota, el0);
-    }
-
+    u32 imm1 = el1 << 16 | el0;
+    u32 imm2 = el3 << 16 | el2;
     rec.setVectorState(SEW::E32, 4);
-    as.VRGATHEREI16(result, dst, iota);
-    as.VMV(v0, 0b1100);
-    as.VRGATHEREI16(result, src, iota, VecMask::Yes);
+    rec.vsplat(iota, imm1);
+    as.VRGATHEREI16(result1, dst, iota);
+    if (imm1 != imm2) {
+        rec.vsplat(iota, imm2);
+    }
+    as.VRGATHEREI16(result2, src, iota);
+    as.VSLIDEUP(result1, result2, 2);
 
-    rec.setVec(&operands[0], result);
+    rec.setVec(&operands[0], result1);
 }
 
 FAST_HANDLE(PSHUFB) {
