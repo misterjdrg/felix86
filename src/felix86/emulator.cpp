@@ -196,14 +196,9 @@ void* Emulator::CompileNext(ThreadState* thread_state) {
 
     g_dispatcher_exit_count++;
 
-    thread_state->signals_disabled = true;
-
+    SignalGuard guard = thread_state->GuardSignals();
     u64 next_block = thread_state->recompiler->getCompiledBlock(thread_state, thread_state->GetRip());
-
-    thread_state->signals_disabled = false;
-
     ASSERT_MSG(next_block != 0, "getCompiledBlock returned null?");
-
     return (void*)next_block;
 }
 
@@ -217,8 +212,8 @@ std::pair<ExitReason, int> Emulator::Start(const StartParameters& config) {
     int exit_code;
     g_params = config;
 
-    g_process_globals.initialize();
     g_fs = std::make_unique<Filesystem>();
+    g_process_globals.initialize();
 
 #ifdef PR_RISCV_SET_ICACHE_FLUSH_CTX
     prctl(PR_RISCV_SET_ICACHE_FLUSH_CTX, PR_RISCV_CTX_SW_FENCEI_ON, PR_RISCV_SCOPE_PER_PROCESS);
