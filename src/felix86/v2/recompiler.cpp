@@ -2381,14 +2381,12 @@ x86_size_e Recompiler::zydisToSize(ZyanU8 size) {
 
 void Recompiler::repPrologue(Label* loop_end, biscuit::GPR rcx) {
     // Signal handling would get tricky if we had to account for this looping mess of an instruction
-    disableSignals();
     as.BEQZ(rcx, loop_end);
 }
 
 void Recompiler::repEpilogue(Label* loop_body, biscuit::GPR rcx) {
     as.ADDI(rcx, rcx, -1);
     as.BNEZ(rcx, loop_body);
-    enableSignals();
 }
 
 void Recompiler::repzEpilogue(Label* loop_body, Label* loop_end, biscuit::GPR rcx, bool is_repz) {
@@ -2402,7 +2400,6 @@ void Recompiler::repzEpilogue(Label* loop_body, Label* loop_end, biscuit::GPR rc
         biscuit::GPR zf = flag(X86_REF_ZF);
         as.BEQZ(zf, loop_body);
     }
-    enableSignals();
 }
 
 void Recompiler::sext(biscuit::GPR dst, biscuit::GPR src, x86_size_e size) {
