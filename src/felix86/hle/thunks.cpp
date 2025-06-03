@@ -45,9 +45,7 @@ void Thunks::runConstructor(const char*, GuestPointers*) {}
 
 #include <GL/glx.h>
 #include <X11/Xlibint.h>
-#include <X11/Xutil.h>
 #include <vulkan/vulkan.h>
-#include <wayland-client.h>
 
 void* libGL = nullptr;
 void* libGLX = nullptr;
@@ -65,6 +63,32 @@ using mallocType = decltype(&malloc);
 XGetVisualInfoType felix86_guest_XGetVisualInfo = nullptr;
 XSyncType felix86_guest_XSync = nullptr;
 mallocType felix86_guest_malloc = nullptr;
+
+// Since we only need these from wayland-client.h, instead of including the file and requiring
+// a dependency we just define them here
+struct wl_interface {
+    /** Interface name */
+    const char* name;
+    /** Interface version */
+    int version;
+    /** Number of methods (requests) */
+    int method_count;
+    /** Method (request) signatures */
+    const struct wl_message* methods;
+    /** Number of events */
+    int event_count;
+    /** Event signatures */
+    const struct wl_message* events;
+};
+
+struct wl_message {
+    /** Message name */
+    const char* name;
+    /** Message signature */
+    const char* signature;
+    /** Object argument interfaces */
+    const struct wl_interface** types;
+};
 
 static std::mutex display_map_mutex;
 static std::unordered_map<Display*, Display*> host_to_guest;
@@ -360,10 +384,12 @@ void* felix86_thunk_vkGetDeviceProcAddr(VkDevice device, const char* name) {
 }
 
 void* felix86_thunk_eglGetProcAddress(const char* name) {
-    VERBOSE("eglGetProcAddress: %s", name);
     void* ptr = get_custom_egl_thunk(name);
     if (ptr == nullptr) {
-        ptr = host_eglGetProcAddress(name);
+        ptr = get_custom_gl_thunk(name);
+        if (ptr == nullptr) {
+            ptr = host_eglGetProcAddress(name);
+        }
     }
 
     if (ptr) {
@@ -431,7 +457,7 @@ int felix86_thunk_wl_proxy_add_listener(struct wl_proxy* proxy, void** callbacks
 
     struct wl_interface* interface = *(struct wl_interface**)proxy;
     u64* host_callable = new u64[WL_CLOSURE_MAX_ARGS];
-    for (u32 i = 0; i < interface->event_count; i++) {
+    for (int i = 0; i < interface->event_count; i++) {
         const char* signature = interface->events[i].signature;
         std::string f86_signature = wl_to_felix86_signature(signature);
         void* callback = callbacks[i];
