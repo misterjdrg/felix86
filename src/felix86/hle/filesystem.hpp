@@ -6,7 +6,7 @@
 #include <linux/stat.h>
 #include "felix86/common/elf.hpp"
 #include "felix86/common/log.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 struct Filesystem {
     Filesystem();

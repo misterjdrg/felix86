@@ -1,5 +1,7 @@
 #include <cmath>
 #include <Zydis/Zydis.h>
+#include "felix86/common/types.hpp"
+#include "felix86/common/utility.hpp"
 #include "felix86/v2/recompiler.hpp"
 
 #define FAST_HANDLE(name)                                                                                                                            \

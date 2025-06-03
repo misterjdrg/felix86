@@ -1,11 +1,11 @@
 #pragma once
 
 #include "biscuit/isa.hpp"
+#include "felix86/common/global.hpp"
 #include "felix86/common/log.hpp"
 #include "felix86/common/signal_queue.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 #include "felix86/hle/guest_types.hpp"
-#include "felix86/hle/signals.hpp"
 
 // We statically allocate 8 FPRs and 8 Vecs for x87 and MMX. But in x86 they share the same registers.
 // For this reason we need to have a way to communicate to signal handlers which registers hold the correct values.
@@ -22,6 +22,8 @@ enum class x87State {
 #define C3_BIT (1 << 14)
 
 struct Recompiler;
+struct ThreadState;
+struct SignalHandlerTable;
 
 typedef enum : u8 {
     X86_REF_RAX,
@@ -160,8 +162,8 @@ struct ThreadState {
     u64 ssbase{};
     u64 esbase{};
     u32 mxcsr{0x1F80}; // default value
-    RMode rmode_sse{RMode::RNE};
-    RMode rmode_x87{RMode::RNE};
+    biscuit::RMode rmode_sse{biscuit::RMode::RNE};
+    biscuit::RMode rmode_x87{biscuit::RMode::RNE};
     u16 fpu_cw{};
     u16 fpu_tw{};
     u16 fpu_sw{};

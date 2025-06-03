@@ -1,5 +1,6 @@
 #include <cstring>
 #include <sys/socket.h>
+#include <vector>
 #include "felix86/common/log.hpp"
 #include "felix86/hle/socket32.hpp"
 

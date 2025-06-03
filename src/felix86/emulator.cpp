@@ -10,8 +10,11 @@
 #include <sys/prctl.h>
 #include <sys/random.h>
 #include "felix86/common/script.hpp"
+#include "felix86/common/types.hpp"
+#include "felix86/common/utility.hpp"
 #include "felix86/emulator.hpp"
 #include "felix86/hle/brk.hpp"
+#include "felix86/hle/signals.hpp"
 #include "felix86/hle/thread.hpp"
 #include "felix86/hle/thunks.hpp"
 #include "felix86/v2/recompiler.hpp"

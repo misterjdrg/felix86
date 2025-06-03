@@ -2,7 +2,7 @@
 
 #include <unordered_map>
 #include "felix86/common/freelist.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 // TODO: add verifications using /proc/self/maps and optional debugging mode that always verifies
 struct Mapper {

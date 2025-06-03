@@ -7,6 +7,8 @@
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include "felix86/common/overlay.hpp"
+#include "felix86/common/types.hpp"
+#include "felix86/common/utility.hpp"
 #include "felix86/hle/filesystem.hpp"
 
 #define FLAGS_SET(v, flags) ((~(v) & (flags)) == 0)

@@ -1,7 +1,8 @@
 #pragma once
 
+#include <vector>
 #include "felix86/common/process_lock.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 // A freelist allocator implementation that matches our needs
 struct Freelist {

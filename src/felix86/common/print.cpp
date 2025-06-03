@@ -1,6 +1,7 @@
 #include <cstdio>
 #include "felix86/common/log.hpp"
 #include "felix86/common/print.hpp"
+#include "felix86/common/utility.hpp"
 
 std::string print_guest_register(x86_ref_e guest) {
     switch (guest) {

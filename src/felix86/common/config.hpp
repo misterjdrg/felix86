@@ -6,7 +6,7 @@
 #pragma once
 
 #include <filesystem>
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 struct Config {
 #define X(group, type, name, value, ...) type name = value;

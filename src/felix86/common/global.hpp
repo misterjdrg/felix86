@@ -7,13 +7,12 @@
 #include <unistd.h>
 #include "felix86/common/process_lock.hpp"
 #include "felix86/common/start_params.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 struct Filesystem;
-
 struct GDBJIT;
-
 struct Perf;
+struct ThreadState;
 
 struct MappedRegion {
     u64 base{};

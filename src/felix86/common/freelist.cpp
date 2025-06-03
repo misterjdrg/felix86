@@ -1,5 +1,6 @@
 #include "felix86/common/freelist.hpp"
 #include "felix86/common/log.hpp"
+#include "felix86/common/utility.hpp"
 
 Freelist::Freelist() {
     list = new Node;

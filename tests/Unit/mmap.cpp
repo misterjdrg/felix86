@@ -4,6 +4,8 @@
 #include <sys/mman.h>
 #include "felix86/common/global.hpp"
 #include "felix86/common/log.hpp"
+#include "felix86/common/types.hpp"
+#include "felix86/common/utility.hpp"
 #include "felix86/hle/mmap.hpp"
 
 namespace Catch {
@@ -125,7 +127,6 @@ CATCH_TEST_CASE("FirstPages", "[mmap32]") {
     MUNMAP_ALL();
     SUCCESS_MESSAGE();
 }
-
 
 CATCH_TEST_CASE("FirstPagesUnmap", "[mmap32]") {
     std::vector<std::pair<u32, u32>> unmap_me;

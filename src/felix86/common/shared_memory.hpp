@@ -1,6 +1,6 @@
 #pragma once
 
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 struct SharedMemory {
     explicit SharedMemory(size_t size);

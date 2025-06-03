@@ -10,7 +10,7 @@
 #include <sys/sysinfo.h>
 #include <sys/uio.h>
 #include "felix86/common/log.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 using x86_fdset = u32;
 

@@ -1,4 +1,5 @@
 #include <sys/mount.h>
+#include <vector>
 #include "felix86/common/sudo.hpp"
 
 // When the system is rebooted, files in /run are deleted -- and mounts are also unmounted

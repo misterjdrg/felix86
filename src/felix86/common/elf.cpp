@@ -14,6 +14,7 @@
 #include "felix86/common/global.hpp"
 #include "felix86/common/log.hpp"
 #include "felix86/common/perf.hpp"
+#include "felix86/common/types.hpp"
 #include "felix86/hle/mmap.hpp"
 
 // Not a full ELF implementation, but one that suits our needs as a loader of

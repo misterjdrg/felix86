@@ -3,7 +3,7 @@
 #include <string>
 #include <fmt/format.h>
 #include "felix86/common/log.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 struct nullable {
     const char* str;

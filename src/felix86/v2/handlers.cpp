@@ -1,5 +1,7 @@
 #include <Zydis/Zydis.h>
 #include "felix86/emulator.hpp"
+#include "felix86/common/types.hpp"
+#include "felix86/common/utility.hpp"
 #include "felix86/hle/thunks.hpp"
 #include "felix86/v2/recompiler.hpp"
 

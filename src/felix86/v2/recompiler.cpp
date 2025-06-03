@@ -6,6 +6,8 @@
 #include "felix86/common/frame.hpp"
 #include "felix86/common/gdbjit.hpp"
 #include "felix86/common/perf.hpp"
+#include "felix86/common/types.hpp"
+#include "felix86/common/utility.hpp"
 #include "felix86/emulator.hpp"
 #include "felix86/hle/syscall.hpp"
 #include "felix86/v2/recompiler.hpp"

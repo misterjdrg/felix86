@@ -1,8 +1,10 @@
 #pragma once
 
 #include <csignal>
+#include "felix86/common/global.hpp"
 #include "felix86/common/log.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/state.hpp"
+#include "felix86/common/types.hpp"
 
 #ifndef SA_NODEFER
 #define SA_NODEFER 0x40000000

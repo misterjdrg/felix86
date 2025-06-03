@@ -3,6 +3,7 @@
 #include <toml.hpp>
 #include "felix86/common/config.hpp"
 #include "felix86/common/log.hpp"
+#include "felix86/common/types.hpp"
 #include "fmt/format.h"
 
 Config g_config{};

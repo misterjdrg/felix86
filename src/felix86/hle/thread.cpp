@@ -7,8 +7,11 @@
 #include <sys/prctl.h>
 #include <sys/resource.h>
 #include "felix86/common/log.hpp"
+#include "felix86/common/state.hpp"
+#include "felix86/common/types.hpp"
 #include "felix86/common/utility.hpp"
 #include "felix86/hle/mmap.hpp"
+#include "felix86/hle/signals.hpp"
 #include "felix86/hle/thread.hpp"
 #include "felix86/v2/recompiler.hpp"
 

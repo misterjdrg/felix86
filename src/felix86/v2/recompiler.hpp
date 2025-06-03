@@ -8,6 +8,7 @@
 #include "biscuit/assembler.hpp"
 #include "felix86/common/frame.hpp"
 #include "felix86/common/state.hpp"
+#include "felix86/common/types.hpp"
 #include "felix86/common/utility.hpp"
 
 constexpr int address_cache_bits = 20;

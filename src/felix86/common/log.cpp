@@ -4,6 +4,7 @@
 #include <sys/inotify.h>
 #include <sys/prctl.h>
 #include <sys/stat.h>
+#include "felix86/common/global.hpp"
 #include "felix86/common/log.hpp"
 
 std::string pipe_name;

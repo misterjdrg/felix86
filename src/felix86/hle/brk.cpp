@@ -3,7 +3,7 @@
 #include <sys/sysinfo.h>
 #include "felix86/common/global.hpp"
 #include "felix86/common/log.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 #include "felix86/hle/brk.hpp"
 #include "felix86/hle/mmap.hpp"
 

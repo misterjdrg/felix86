@@ -1,3 +1,4 @@
+#include <climits>
 #include <cstring>
 #include "felix86/common/log.hpp"
 #include "felix86/common/script.hpp"

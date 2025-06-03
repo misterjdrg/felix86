@@ -9,6 +9,8 @@
 #include <string>
 #include "felix86/common/config.hpp"
 #include "felix86/common/log.hpp"
+#include "felix86/common/types.hpp"
+#include "felix86/common/utility.hpp"
 
 void Thunks::initialize() {
     const char* env = getenv("FELIX86_ENABLED_THUNKS");

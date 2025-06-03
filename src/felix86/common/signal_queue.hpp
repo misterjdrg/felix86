@@ -3,7 +3,6 @@
 #include <array>
 #include <csignal>
 #include "felix86/common/log.hpp"
-#include "felix86/common/utility.hpp"
 
 struct PendingSignal {
     int sig;

@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include "felix86/common/log.hpp"
+#include "felix86/common/utility.hpp"
 
 struct Symlinker {
     static bool link(const std::filesystem::path& real_path, const std::filesystem::path& dest_path) {

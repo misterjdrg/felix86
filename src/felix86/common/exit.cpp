@@ -3,6 +3,7 @@
 #include "felix86/common/exit.hpp"
 #include "felix86/common/print.hpp"
 #include "felix86/common/state.hpp"
+#include "felix86/common/utility.hpp"
 
 void felix86_exit(int code) {
     if (g_config.dump_regs) {

@@ -1,6 +1,6 @@
 #include <cstring>
 #include "felix86/common/log.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 #define __user
 #include "headers/drm.h"

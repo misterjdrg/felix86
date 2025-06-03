@@ -17,6 +17,8 @@
 #include "felix86/hle/filesystem.hpp"
 #include "felix86/hle/mmap.hpp"
 
+using namespace biscuit;
+
 bool g_extensions_manually_specified = false;
 bool g_print_all_calls = false;
 bool g_mode32 = false;

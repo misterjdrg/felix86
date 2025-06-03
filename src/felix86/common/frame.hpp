@@ -2,9 +2,13 @@
 
 #include <array>
 #include <biscuit/registers.hpp>
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
-constexpr static std::array saved_gprs = {ra, sp, tp, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11};
+struct ThreadState;
+
+constexpr static std::array saved_gprs = {biscuit::ra, biscuit::sp, biscuit::tp,
+    biscuit::s0, biscuit::s1, biscuit::s2, biscuit::s3, biscuit::s4, biscuit::s5,
+    biscuit::s6, biscuit::s7, biscuit::s8, biscuit::s9, biscuit::s10, biscuit::s11};
 
 // A frame in the host stack that contains saved host registers
 // This is used to restore the context before entering the dispatcher and to also store multiple contexts

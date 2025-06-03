@@ -1,4 +1,4 @@
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 #define __user
 #include "headers/radeon_drm.h"

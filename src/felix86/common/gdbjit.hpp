@@ -4,7 +4,7 @@
 #include <list>
 #include "felix86/common/gdbjitblock.h"
 #include "felix86/common/process_lock.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 #ifdef __cplusplus
 extern "C" {

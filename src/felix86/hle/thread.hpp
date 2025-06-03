@@ -4,7 +4,7 @@
 #include <utility>
 #include <linux/sched.h>
 #include <sched.h>
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 
 struct CloneArgs {
     ThreadState* parent_state = nullptr;

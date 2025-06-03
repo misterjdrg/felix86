@@ -6,7 +6,7 @@
 #include <vector>
 #include <catch2/catch_test_macros.hpp>
 #include "felix86/common/state.hpp"
-#include "felix86/common/utility.hpp"
+#include "felix86/common/types.hpp"
 #include "felix86/emulator.hpp"
 
 /*

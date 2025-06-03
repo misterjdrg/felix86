@@ -18,7 +18,9 @@
 #include "felix86/common/log.hpp"
 #include "felix86/common/sudo.hpp"
 #include "felix86/common/symlink.hpp"
+#include "felix86/common/utility.hpp"
 #include "felix86/emulator.hpp"
+#include "felix86/hle/signals.hpp"
 #include "felix86/hle/thunks.hpp"
 
 #if !defined(__riscv)

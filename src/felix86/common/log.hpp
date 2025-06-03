@@ -53,12 +53,14 @@ struct Logger {
         Logger::log(ANSI_COLOR_RED "%s:%d (Thread: %d) " format ANSI_COLOR_RESET "\n", __FILENAME__, __LINE__, getpid(), ##__VA_ARGS__);             \
         felix86_exit(1);                                                                                                                             \
     } while (0)
+
 #define WARN(format, ...)                                                                                                                            \
     do {                                                                                                                                             \
         if (!g_config.quiet) {                                                                                                                       \
             Logger::log(ANSI_COLOR_YELLOW format ANSI_COLOR_RESET "\n", ##__VA_ARGS__);                                                              \
         }                                                                                                                                            \
     } while (0)
+
 #define VERBOSE(format, ...)                                                                                                                         \
     do {                                                                                                                                             \
         if (g_config.verbose && !g_config.quiet) {                                                                                                   \
@@ -101,6 +103,7 @@ struct Logger {
         ERROR("Unreachable code hit");                                                                                                               \
         __builtin_unreachable();                                                                                                                     \
     } while (false)
+
 #define UNIMPLEMENTED() ERROR("Unimplemented code hit")
 
 #define ASSERT(condition)                                                                                                                            \

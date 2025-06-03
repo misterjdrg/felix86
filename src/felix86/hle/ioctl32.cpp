@@ -1,5 +1,7 @@
 #include <asm/ioctl.h>
 #include <sys/ioctl.h>
+#include <unordered_map>
+#include "felix86/common/global.hpp"
 #include "felix86/common/log.hpp"
 #include "felix86/hle/ioctl32.hpp"
 
