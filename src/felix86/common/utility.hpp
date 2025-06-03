@@ -6,9 +6,9 @@
 #include <string>
 #include <vector>
 #include <stdbool.h>
-#include "felix86/common/types.hpp"
 #include "Zydis/Register.h"
 #include "biscuit/isa.hpp"
+#include "felix86/common/types.hpp"
 
 [[nodiscard]] constexpr bool IsValidJTypeImm(ptrdiff_t value) {
     return value >= -0x80000 && value <= 0x7FFFF;
