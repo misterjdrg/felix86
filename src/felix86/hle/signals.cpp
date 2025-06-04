@@ -297,8 +297,6 @@ x64_rt_sigframe* setupFrame(RegisteredSignal& signal, int sig, ThreadState* stat
 }
 
 void Signals::sigreturn(ThreadState* state) {
-    auto guard = state->GuardSignals();
-
     u64 rsp = state->GetGpr(X86_REF_RSP);
 
     // When the signal handler returned, it popped the return address, which is the 8 bytes "pretcode" field in the sigframe
@@ -310,7 +308,7 @@ void Signals::sigreturn(ThreadState* state) {
     x64_rt_sigframe* frame = (x64_rt_sigframe*)rsp;
     rsp += sizeof(x64_rt_sigframe);
 
-    SIGLOG("------- sigreturn -------");
+    SIGLOG("------- sigreturn TID: %d -------", gettid());
 
     // The registers need to be restored to what they were before the signal handler was called, or what the signal handler changed them to.
     state->SetGpr(X86_REF_RAX, frame->uc.uc_mcontext.gregs[REG_RAX]);
@@ -585,35 +583,7 @@ bool dispatch_guest(int sig, siginfo_t* info, void* ctx) {
 
     ASSERT(sig > 0);
 
-    if (state->signals_disabled) {
-        if (sig < __SIGRTMIN) {
-            const int sig_bit = sig - 1;
-            state->pending_signals |= 1 << sig_bit;
-            state->nonrt_siginfos[sig_bit] = *info;
-            if (sig == SIGSEGV) {
-                SIGLOG("SIGSEGV with signals_disabled, dumping states and exiting...");
-                if (g_config.calltrace) {
-                    dump_states();
-                } else {
-                    print_address(state->GetRip());
-                }
-                PLAIN("My TID is %d, you have 40 seconds to attach gdb using `gdb -p %d` to "
-                      "find out why!",
-                      gettid(), gettid());
-                sleep(40);
-                UNREACHABLE();
-            }
-            SIGLOG("Deferring signal %d from %lx", sig, state->GetRip());
-        } else {
-            // Unlike signals 1-31, signals 32 and up (realtime signals) can be queued and you can have multiple
-            // pending of each signal
-            state->queued_signals.push({sig, *info});
-            SIGLOG("Deferring realtime signal %d from %lx", sig, state->GetRip());
-        }
-        return true;
-    }
-
-    SIGLOG("------- Guest signal %s (%d) %s PID: %d -------", sigdescr_np(sig), sig, in_jit_code ? "in jit code" : "not in jit code", getpid());
+    SIGLOG("------- Guest signal %s (%d) %s TID: %d -------", sigdescr_np(sig), sig, in_jit_code ? "in jit code" : "not in jit code", gettid());
 
     ASSERT(!g_mode32);
 
@@ -646,19 +616,7 @@ bool dispatch_guest(int sig, siginfo_t* info, void* ctx) {
         use_altstack = false;
     }
 
-    siginfo_t guest_info;
-    if (info->si_code == SI_QUEUE && state->incoming_signal) {
-        // One of our queued signals, retrieve the siginfo_t from the pointer
-        FiredSignal* signal = (FiredSignal*)info->si_value.sival_ptr;
-        if (signal && signal->magic == FiredSignal::expected_magic) {
-            guest_info = signal->guest_info;
-        } else {
-            guest_info = *info;
-            SIGLOG("state->incoming_signal is set but magic is not what we expected");
-        }
-    } else {
-        guest_info = *info;
-    }
+    siginfo_t guest_info = *info;
 
     // Prepares everything necessary to run the signal handler when we return from the host signal handler.
     // The stack is switched if necessary and filled with the frame that the signal handler expects.
@@ -668,16 +626,17 @@ bool dispatch_guest(int sig, siginfo_t* info, void* ctx) {
     sigset_t new_mask;
     sigset_t mask_during_signal;
     mask_during_signal = *(sigset_t*)&handler->mask;
-    sigandset(&new_mask, &mask_during_signal, Signals::hostSignalMask());
 
     // Combine with the current signal mask
-    sigorset(&new_mask, &new_mask, &state->signal_mask);
+    sigorset(&new_mask, &mask_during_signal, &state->signal_mask);
 
     if (handler->flags & SA_NODEFER) {
         sigdelset(&new_mask, sig);
     } else {
         sigaddset(&new_mask, sig);
     }
+
+    sigandset(&new_mask, &new_mask, Signals::hostSignalMask());
 
     pthread_sigmask(SIG_SETMASK, &new_mask, nullptr);
 
@@ -786,7 +745,10 @@ RegisteredSignal Signals::getSignalHandler(ThreadState* state, int sig) {
 }
 
 int Signals::sigsuspend(ThreadState* state, sigset_t* mask) {
+    sigset_t old_mask = state->signal_mask;
+    memcpy(&state->signal_mask, mask, sizeof(u64));
     int result = ::sigsuspend(mask);
+    memcpy(&state->signal_mask, &old_mask, sizeof(u64));
     if (result == -1) {
         return -errno;
     } else {
@@ -794,55 +756,17 @@ int Signals::sigsuspend(ThreadState* state, sigset_t* mask) {
     }
 }
 
-void Signals::checkPending(ThreadState* state) {
-    if (state->signals_disabled) {
-        return;
-    }
+SignalGuard::SignalGuard() {
+    static sigset_t full_mask = []() {
+        sigset_t t;
+        sigfillset(&t);
+        sigandset(&t, &t, Signals::hostSignalMask());
+        return t;
+    }();
 
-    // Check if there's any pending signals. If there are, raise them.
-    while (state->pending_signals) {
-        const int sig_bit = __builtin_ctz(state->pending_signals);
-        const int sig = sig_bit + 1;
+    pthread_sigmask(SIG_SETMASK, &full_mask, &old_mask);
+}
 
-        SIGLOG("Handling deferred signal %d (PID: %d, TID: %d)", sig, getpid(), gettid());
-
-        state->pending_signals &= ~(1 << sig_bit);
-
-        FiredSignal fired_signal{.guest_info = state->nonrt_siginfos[sig_bit]};
-
-        sigval val{.sival_ptr = &fired_signal};
-
-        state->incoming_signal = true;
-
-        // Raise the signal...
-        ASSERT(sigqueue(getpid(), sig, val) == 0);
-
-        state->incoming_signal = false;
-    }
-
-    while (!state->queued_signals.empty()) {
-        ASSERT(!state->signals_disabled);
-        sigset_t full, old;
-        sigfillset(&full);
-        pthread_sigmask(SIG_BLOCK, &full, &old); // block signals to make changing queued_signals safe
-
-        PendingSignal signal = state->queued_signals.pop();
-
-        pthread_sigmask(SIG_SETMASK, &old, nullptr);
-
-        int sig = signal.sig;
-        siginfo_t info = signal.info;
-
-        SIGLOG("Handling deferred realtime signal %d (PID: %d, TID: %d)", sig, getpid(), gettid());
-
-        FiredSignal fired_signal{.guest_info = info};
-        sigval val{.sival_ptr = &fired_signal};
-
-        state->incoming_signal = true;
-
-        // Raise the signal...
-        ASSERT(sigqueue(getpid(), sig, val) == 0);
-
-        state->incoming_signal = false;
-    }
+SignalGuard::~SignalGuard() {
+    pthread_sigmask(SIG_SETMASK, &old_mask, nullptr);
 }

@@ -195,11 +195,9 @@ std::pair<void*, size_t> Emulator::setupMainStack(ThreadState* state) {
 }
 
 void* Emulator::CompileNext(ThreadState* thread_state) {
-    Signals::checkPending(thread_state);
-
     g_dispatcher_exit_count++;
 
-    SignalGuard guard = thread_state->GuardSignals();
+    SignalGuard guard;
     u64 next_block = thread_state->recompiler->getCompiledBlock(thread_state, thread_state->GetRip());
     ASSERT_MSG(next_block != 0, "getCompiledBlock returned null?");
     return (void*)next_block;

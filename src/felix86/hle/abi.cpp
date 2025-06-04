@@ -3,8 +3,8 @@
 #include "felix86/common/state.hpp"
 #include "felix86/common/types.hpp"
 #include "felix86/common/utility.hpp"
-#include "felix86/emulator.hpp"
 #include "felix86/hle/abi.hpp"
+#include "felix86/hle/signals.hpp"
 #include "felix86/v2/recompiler.hpp"
 
 biscuit::GPR gprarg(int i) {
@@ -149,10 +149,6 @@ GuestToHostMarshaller::GuestToHostMarshaller(const std::string& name, const std:
 void GuestToHostMarshaller::emitPrologue(biscuit::Assembler& as) {
     ASSERT(signature.size() >= 2);
     ASSERT(signature[1] == '_');
-
-    as.LD(t3, offsetof(ThreadState, signals_disabled), Recompiler::threadStatePointer());
-    as.ADDI(t3, t3, 1);
-    as.SD(t3, offsetof(ThreadState, signals_disabled), Recompiler::threadStatePointer());
 
 #if 0
     biscuit::Label after;
@@ -423,10 +419,6 @@ void GuestToHostMarshaller::emitEpilogue(biscuit::Assembler& as) {
     if (stack_size != 0) {
         as.ADDI(sp, sp, stack_size);
     }
-
-    as.LD(t3, offsetof(ThreadState, signals_disabled), Recompiler::threadStatePointer());
-    as.ADDI(t3, t3, -1);
-    as.SD(t3, offsetof(ThreadState, signals_disabled), Recompiler::threadStatePointer());
 }
 
 void enter_dispatcher_for_callback(ThreadState* state) {
@@ -441,7 +433,7 @@ void enter_dispatcher_for_callback(ThreadState* state) {
 void* ABIMadness::hostToGuestTrampoline(const char* signature, const void* guest_function) {
     // We need custom guest code and custom host code
     ThreadState* state = ThreadState::Get();
-    SignalGuard guard = state->GuardSignals();
+    SignalGuard guard;
     u8* const x86_code = state->x86_trampoline_storage;
     u8* curr = x86_code;
     // Our recompiler marks guest code as PROT_READ, we need to undo this as it may have marked previous trampolines
