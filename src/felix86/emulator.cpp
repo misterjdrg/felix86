@@ -213,7 +213,6 @@ std::pair<ExitReason, int> Emulator::Start(const StartParameters& config) {
     int exit_code;
     g_params = config;
 
-    g_fs = std::make_unique<Filesystem>();
     g_process_globals.initialize();
 
 #ifdef PR_RISCV_SET_ICACHE_FLUSH_CTX
@@ -297,7 +296,7 @@ std::pair<ExitReason, int> Emulator::Start(const StartParameters& config) {
             ERROR("I failed to allocate the 32-bit guard");
         }
 
-        prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, 4 * GB, 2 * GB, "guard");
+        prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, 4 * GB, 2 * GB, "felix86-guard");
     } else {
         g_mode32 = false;
     }

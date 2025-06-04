@@ -1382,6 +1382,48 @@ void felix86_fxam(ThreadState* state) {
     state->fpu_sw |= c3 ? C3_BIT : 0;
 }
 
+// TODO: One day we need to make this better. It serves to hide some felix86 related files from /proc/self/maps
+// because some things try to scan /proc/self/maps and open them. It also hides the rootfs path from the paths.
+// However it also will leak some mappings not owned by the guest, for example anything we mmap
+// A better solution would be to track every mmap/munmap/mremap/mprotect/... we do and generate a maps using them, if possible
+// However since it's not trivial we won't do it until it's proven necessary
+std::string felix86_maps() {
+    std::string ret;
+    std::ifstream ifs("/proc/self/maps");
+    std::string line;
+    char buffer[PATH_MAX];
+    std::string srootfs_path = g_config.rootfs_path;
+    while (std::getline(ifs, line)) {
+        int result = sscanf(line.c_str(), "%*lx-%*lx %*s %*s %*s %*s %s", buffer);
+        if (result == 1) {
+            if (line.find(srootfs_path) != std::string::npos) {
+                // Remove rootfs path from the line, if it exists
+                replace_all(line, srootfs_path, "");
+                ret += line + "\n";
+            } else {
+                // If this is a file, it's not inside the rootfs so we don't let the guest know
+                // If it's not a file, then it might be something like [heap] so we report that
+                std::error_code ec;
+                if (std::filesystem::exists(buffer, ec)) {
+                    // Ignore this line
+                } else {
+                    std::string anon = buffer;
+                    // Hide our own mappings
+                    // TODO: this leaks the host heap, stack, vdso, ... to the guest
+                    if (anon != "[felix86-brk]" && anon != "[felix86-guard]" && anon != "[felix86-bss]") {
+                        ret += line + "\n";
+                    }
+                }
+            }
+        } else {
+            // Failed to parse, probably not a file mapped line
+            // Just add it to the ret
+            ret += line + "\n";
+        }
+    }
+    return ret;
+}
+
 const std::string& felix86_cpuinfo() {
 #define ADD_FLAG(cond, name)                                                                                                                         \
     do {                                                                                                                                             \
