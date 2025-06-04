@@ -183,8 +183,20 @@ u64 get_actual_rip(BlockMetadata& metadata, u64 host_pc) {
 #define REG_PC 0 // risc-v stores it in gpr 0
 #endif
 
+u64 setupFrame32(RegisteredSignal& signal, int sig, ThreadState* state, const u64* host_gprs, const u64* host_fprs,
+                            const XmmReg* host_vecs, bool in_jit_code, siginfo_t* guest_info) {
+
+    ASSERT_MSG(false, "TODO: setupFrame32");
+    return 0;
+}
+u64 setupFrame32RT(RegisteredSignal& signal, int sig, ThreadState* state, const u64* host_gprs, const u64* host_fprs,
+                            const XmmReg* host_vecs, bool in_jit_code, siginfo_t* guest_info) {
+    
+    ASSERT_MSG(false, "TODO: setupFrame32RT");
+    return 0;
+}
 // arch/x86/kernel/signal.c, get_sigframe function prepares the signal frame
-x64_rt_sigframe* setupFrame(RegisteredSignal& signal, int sig, ThreadState* state, const u64* host_gprs, const u64* host_fprs,
+u64 setupFrame64(RegisteredSignal& signal, int sig, ThreadState* state, const u64* host_gprs, const u64* host_fprs,
                             const XmmReg* host_vecs, bool in_jit_code, siginfo_t* guest_info) {
     bool use_altstack = signal.flags & SA_ONSTACK;
     if (in_jit_code) {
@@ -293,7 +305,22 @@ x64_rt_sigframe* setupFrame(RegisteredSignal& signal, int sig, ThreadState* stat
 
     state->SetFlag(X86_REF_DF, 0);
 
-    return frame;
+    return frame->uc.uc_mcontext.gregs[REG_RIP];
+}
+u64 setupFrame(RegisteredSignal& signal, int sig, ThreadState* state, const u64* host_gprs, const u64* host_fprs,
+                            const XmmReg* host_vecs, bool in_jit_code, siginfo_t* guest_info) {
+    u64 old_rip;
+    if(g_mode32) {
+        if (signal.flags & SA_SIGINFO) {
+            old_rip = setupFrame32RT(signal, sig, state, host_gprs, host_fprs, host_vecs, in_jit_code, guest_info);
+        } else {
+            old_rip = setupFrame32(signal, sig, state, host_gprs, host_fprs, host_vecs, in_jit_code, guest_info);
+        }
+    } else {
+        old_rip = setupFrame64(signal, sig, state, host_gprs, host_fprs, host_vecs, in_jit_code, guest_info);
+    }
+
+    return old_rip;
 }
 
 void Signals::sigreturn(ThreadState* state) {
@@ -585,7 +612,6 @@ bool dispatch_guest(int sig, siginfo_t* info, void* ctx) {
 
     SIGLOG("------- Guest signal %s (%d) %s TID: %d -------", sigdescr_np(sig), sig, in_jit_code ? "in jit code" : "not in jit code", gettid());
 
-    ASSERT(!g_mode32);
 
     XmmReg* xmms;
 
@@ -620,7 +646,7 @@ bool dispatch_guest(int sig, siginfo_t* info, void* ctx) {
 
     // Prepares everything necessary to run the signal handler when we return from the host signal handler.
     // The stack is switched if necessary and filled with the frame that the signal handler expects.
-    x64_rt_sigframe* frame = setupFrame(*handler, sig, state, gprs, fprs, xmms, in_jit_code, &guest_info);
+    u64 old_rip = setupFrame(*handler, sig, state, gprs, fprs, xmms, in_jit_code, &guest_info);
 
     // Block the signals specified in the sa_mask until the signal handler returns
     sigset_t new_mask;
@@ -644,7 +670,6 @@ bool dispatch_guest(int sig, siginfo_t* info, void* ctx) {
         handler->func = (u64)SIG_DFL;
     }
 
-    u64 old_rip = frame->uc.uc_mcontext.gregs[REG_RIP];
 #if 0
     print_address(old_rip);
     print_address(handler->func);
