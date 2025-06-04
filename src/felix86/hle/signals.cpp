@@ -3,6 +3,7 @@
 #include "felix86/common/state.hpp"
 #include "felix86/common/types.hpp"
 #include "felix86/common/utility.hpp"
+#include "felix86/hle/guest_types.hpp"
 #include "felix86/hle/signals.hpp"
 #include "felix86/v2/recompiler.hpp"
 #undef si_pid
@@ -94,6 +95,39 @@ struct x64_mcontext {
 };
 static_assert(sizeof(x64_mcontext) == 256);
 
+struct ia32_sigcontext {
+	u16 gs, __gsh;
+	u16 fs, __fsh;
+	u16 es, __esh;
+	u16 ds, __dsh;
+	u32 di;
+	u32 si;
+	u32 bp;
+	u32 sp;
+	u32 bx;
+	u32 dx;
+	u32 cx;
+	u32 ax;
+	u32 trapno;
+	u32 err;
+	u32 ip;
+	u16 cs, __csh;
+	u32 flags;
+	u32 sp_at_signal;
+	u16 ss, __ssh;
+
+	/*
+	 * fpstate is really (struct _fpstate *) or (struct _xstate *)
+	 * depending on the FP_XSTATE_MAGIC1 encoded in the SW reserved
+	 * bytes of (struct _fpstate) and FP_XSTATE_MAGIC2 present at the end
+	 * of extended memory layout. See comments at the definition of
+	 * (struct _fpx_sw_bytes)
+	 */
+	u32 fpstate; /* Zero when no FPU/extended context */
+	u32 oldmask;
+	u32 cr2;
+};
+
 struct x64_ucontext {
     u64 uc_flags;
     x64_ucontext* uc_link;
@@ -105,6 +139,21 @@ struct x64_ucontext {
 };
 static_assert(sizeof(x64_ucontext) == 976);
 
+typedef struct compat_sigaltstack {
+	u32 ss_sp;
+	i32 ss_flags;
+	u32	ss_size;
+} compat_stack_t;
+
+struct ia32_ucontext {
+	u32 uc_flags;
+	u32 uc_link;
+	compat_stack_t uc_stack;
+	struct ia32_sigcontext uc_mcontext;
+	u32 uc_sigmask[2];	/* mask last for extensibility */
+};
+static_assert(sizeof(ia32_ucontext) == 116);
+
 // https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/sigframe.h#L59
 struct x64_rt_sigframe {
     char* pretcode; // return address
@@ -114,6 +163,38 @@ struct x64_rt_sigframe {
 };
 static_assert(sizeof(siginfo_t) == 128);
 static_assert(sizeof(x64_rt_sigframe) == 1120);
+
+// https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/sigframe.h#L23
+struct ia32_sigframe {
+	u32 pretcode;
+	int sig;
+	struct ia32_sigcontext sc;
+	/*
+	 * fpstate is unused. fpstate is moved/allocated after
+	 * retcode[] below. This movement allows to have the FP state and the
+	 * future state extensions (xsave) stay together.
+	 * And at the same time retaining the unused fpstate, prevents changing
+	 * the offset of extramask[] in the sigframe and thus prevent any
+	 * legacy application accessing/modifying it.
+	 */
+	u32 fpstate_unused[171];
+	u32 extramask[1];
+	char retcode[8];
+	/* fp state follows here */
+};
+
+struct ia32_rt_sigframe {
+	u32 pretcode;
+	int sig;
+	u32 pinfo;
+	u32 puc;
+	x86_siginfo_t info;
+	struct ia32_ucontext uc;
+	char retcode[8];
+	/* fp state follows here */
+};
+static_assert(sizeof(ia32_sigframe) == 792);
+static_assert(sizeof(ia32_rt_sigframe) == 268);
 
 void reconstruct_state(ThreadState* state, const u64* gprs, const u64* fprs, const XmmReg* xmms) {
     if (state->state_is_correct) {
