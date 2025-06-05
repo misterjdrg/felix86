@@ -272,8 +272,48 @@ u64 setupFrame32(RegisteredSignal& signal, int sig, ThreadState* state, const u6
 }
 u64 setupFrame32RT(RegisteredSignal& signal, int sig, ThreadState* state, const u64* host_gprs, const u64* host_fprs,
                             const XmmReg* host_vecs, bool in_jit_code, siginfo_t* guest_info) {
-    
+    bool feature_xsave = false;
+    bool feature_fxsr = false;
+
     ASSERT_MSG(false, "TODO: setupFrame32RT");
+    bool use_altstack = signal.flags & SA_ONSTACK;
+    if (in_jit_code) {
+        // We were in the middle of executing a basic block, the state up to that point needs to be written back to the state struct
+        u64 pc = host_gprs[REG_PC];
+        BlockMetadata* current_block = get_block_metadata(state, pc);
+        u64 actual_rip = get_actual_rip(*current_block, pc);
+        reconstruct_state(state, host_gprs, host_fprs, host_vecs);
+        // TODO: this may be wrong in some occasions? like sometimes we shouldn't do it because we already set the rip? needs investigation
+        state->SetRip(actual_rip);
+    } else {
+        // State reconstruction isn't necessary, the state should be in some stable form
+    }
+
+    u64 rsp = use_altstack ? (u64)state->alt_stack.ss_sp : state->GetGpr(X86_REF_RSP);
+    if (rsp == 0) {
+        ERROR("RSP is null, use_altstack: %d", use_altstack);
+    }
+
+    // no red zone
+    // TODO: Allocate mathframe 
+    u64 math_frame_size = 000;
+    if(feature_xsave) {
+        math_frame_size += 4;
+    }
+
+    // &~0x3ful is round_down to 64
+    u64 math_frame_buf = (rsp - math_frame_size) & ~0x3ful;
+    rsp = math_frame_buf;
+    if(feature_fxsr) {
+        math_frame_size += (28 * sizeof(u32));
+        rsp -= (28 * sizeof(u32));
+    }
+
+    rsp = ((rsp + 4) & -16) - 4;
+
+    rsp = rsp - sizeof(ia32_rt_sigframe);
+    ia32_rt_sigframe* frame = (ia32_rt_sigframe*)rsp;
+
     return 0;
 }
 // arch/x86/kernel/signal.c, get_sigframe function prepares the signal frame
