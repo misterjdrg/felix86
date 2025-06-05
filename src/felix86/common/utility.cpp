@@ -861,6 +861,12 @@ Float80 f64_to_80(double x) {
     return result;
 }
 
+void f64_to_80_mem(double value, u64 address) {
+    Float80 f80 = f64_to_80(value);
+    memcpy((void*)address, &f80, sizeof(Float80));
+    static_assert(sizeof(Float80) == 10);
+}
+
 double f80_to_64(Float80* f80) {
     union {
         double d;
@@ -967,9 +973,9 @@ void felix86_fpatan(ThreadState* state) {
 }
 
 void felix86_f2xm1(ThreadState* state) {
-    double boop;
-    memcpy(&boop, &state->fp[0], sizeof(double));
-    double result = ::exp2(boop) - 1.0;
+    double st0;
+    memcpy(&st0, &state->fp[0], sizeof(double));
+    double result = ::expm1(M_LN2 * st0);
     memcpy(&state->fp[0], &result, sizeof(double));
 }
 
@@ -997,7 +1003,7 @@ void felix86_fyl2xp1(ThreadState* state) {
     double st0, st1;
     memcpy(&st0, &state->fp[0], sizeof(double));
     memcpy(&st1, &state->fp[1], sizeof(double));
-    double result = st1 * log2(st0 + 1.0);
+    double result = (st1 * log1p(st0)) / M_LN2;
     memcpy(&state->fp[1], &result, sizeof(double));
 }
 
