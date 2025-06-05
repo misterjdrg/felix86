@@ -1209,12 +1209,29 @@ Result felix86_syscall_common(felix86_frame* frame, int rv_syscall, u64 arg1, u6
         std::vector<const char*> envp;
 
         // Resolving this symlink helps gdb find the path
-        std::filesystem::path emulator = g_emulator_path;
-        argv.push_back(emulator.c_str());
+        std::filesystem::path executable;
+
+        if (!g_config.binfmt_misc_installed) {
+            executable = g_emulator_path;
+            argv.push_back(executable.c_str());
+            argv.push_back(path.c_str());
+
+            if (check_if_privileged_executable(path)) {
+                // If this is a privileged executable, it won't work out if we don't have binfmt_misc support
+                // Because binfmt_misc would see that the binary has extra permissions and give the emulator
+                // those permissions as well. When we run it through the emulator manually however, we can't
+                // do the same. So warn that this might end badly.
+                WARN("About to run privileged executable %s, but there's no binfmt_misc support, so things may go wrong. Please enable "
+                     "binfmt_misc support by running `felix86 -b` and disabling it for any other x86/x86-64 emulators");
+            }
+        } else {
+            executable = path;
+            // Don't push the emulator, push just the executable and binfmt_misc will figure it out
+            argv.push_back(path.c_str());
+        }
 
         if (arg2) {
             u8* guest_argv = (u8*)arg2;
-            argv.push_back(path.c_str()); // push the resolved path instead of the path in argv[0];
             guest_argv += g_mode32 ? 4 : 8;
             while (true) {
                 u64 ptr = 0;
@@ -1228,8 +1245,6 @@ Result felix86_syscall_common(felix86_frame* frame, int rv_syscall, u64 arg1, u6
             }
         } else {
             WARN("argv null during execve...?");
-            // Args shouldn't be null normally, but at least push the emulated executable here
-            argv.push_back(path.c_str());
         }
         argv.push_back(nullptr);
 
@@ -1281,7 +1296,7 @@ Result felix86_syscall_common(felix86_frame* frame, int rv_syscall, u64 arg1, u6
 
         LOG("Running execve, wish me luck:%s", args.c_str());
 
-        syscall(SYS_execve, emulator.c_str(), argv.data(), envp.data());
+        syscall(SYS_execve, executable.c_str(), argv.data(), envp.data());
 
         UNREACHABLE();
         break;

@@ -41,6 +41,7 @@ static struct argp_option options[] = {
     {"set-rootfs", 's', "DIR", 0, "Set the rootfs path in config.toml"},
     {"set-thunks", 'S', "DIR", 0, "Set the thunks path in config.toml"},
     {"binfmt-misc", 'b', 0, 0, "Register the emulator in binfmt_misc so that x86-64 executables can run without prepending the emulator path"},
+    {"unregister-binfmt-misc", 'u', 0, 0, "Unregister the emulator from binfmt_misc"},
     {0}};
 
 int guest_arg_start_index = -1;
@@ -125,9 +126,81 @@ error:
     return ok;
 }
 
-void binfmt_misc() {
+bool detect_binfmt_misc() {
+    // Run an x86-64 program and set __FELIX86_TEST_BINFMT_MISC which will make felix86 immediately return 0x42.
+    // If the return value is 0x42 that means felix86 was invoked and thus binfmt_misc is correctly installed.
+    // If anything else is returned it means we didn't run it through binfmt_misc thus it's not installed.
+    std::error_code ec;
+    std::filesystem::path path = g_config.rootfs_path / "bin/env";
+    if (std::filesystem::exists(path, ec) && std::filesystem::is_regular_file(path, ec)) {
+        pid_t pid;
+        int status;
+
+        std::vector<char*> envs;
+
+        char** env = environ;
+        while (*env) {
+            envs.push_back(*env);
+            env++;
+        }
+
+        char buf[256] = "__FELIX86_TEST_BINFMT_MISC=1";
+        envs.push_back(buf);
+        envs.push_back(nullptr);
+
+        std::vector<const char*> args = {
+            path.c_str(),
+            nullptr,
+        };
+
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull == -1) {
+            return false;
+        }
+
+        posix_spawn_file_actions_t actions;
+        posix_spawn_file_actions_init(&actions);
+        posix_spawn_file_actions_adddup2(&actions, devnull, STDOUT_FILENO);
+        posix_spawn_file_actions_adddup2(&actions, devnull, STDERR_FILENO);
+
+        if (posix_spawn(&pid, path.c_str(), &actions, NULL, (char**)args.data(), (char**)envs.data()) != 0) {
+            WARN("posix_spawn failed: %d", errno);
+            return false;
+        }
+
+        int exit_status = 0;
+        if (waitpid(pid, &status, 0) == -1) {
+            exit_status = -1;
+        } else {
+            if (WIFEXITED(status)) {
+                exit_status = WEXITSTATUS(status);
+            } else {
+                exit_status = -1;
+            }
+        }
+
+        close(devnull);
+        posix_spawn_file_actions_destroy(&actions);
+
+        // $ROOTFS/bin/env was run through felix86, thus binfmt_misc is installed
+        return exit_status == 0x42;
+    } else {
+        WARN("rootfs/bin/env not found?");
+        return false;
+    }
+}
+
+// TODO: Move me to binfmt.hpp file along with unregister_binfmt_misc
+void binfmt_misc(bool is_register) {
     if (!Sudo::hasPermissions()) {
-        PLAIN("I need root permissions to register/unregister felix86 in binfmt_misc, please re-run with root permissions");
+        printf("I need root permissions to register/unregister felix86 in binfmt_misc, please re-run with root permissions\n");
+        exit(1);
+    }
+
+    Config::initialize();
+    if (g_config.rootfs_path.empty()) {
+        printf("Rootfs path is not set, did you not pass the environment variables when running with sudo? Try `sudo -E felix86 --binfmt-misc` or "
+               "set the rootfs path\n");
         exit(1);
     }
 
@@ -145,31 +218,23 @@ void binfmt_misc() {
         R"!(:felix86-i386:M:0:\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\x00\x00\x00\xff\xff\xff\xff\xff\xfe\xff\xff\xff:{}:OCF)!",
         exe_path);
 
-    // Running felix86 -b either registers or unregisters if they already exist
-    if (std::filesystem::exists("/proc/sys/fs/binfmt_misc/felix86-x86_64") || std::filesystem::exists("/proc/sys/fs/binfmt_misc/felix86-i386")) {
-        auto unregister = [](const char* path) {
-            if (!std::filesystem::exists(path)) {
-                return;
-            }
+    if (!is_register) {
+        if (unregister_binfmt_misc("felix86-x86_64")) {
+            printf("Unregistered felix86 from binfmt_misc for x86-64 apps\n");
+        }
 
-            FILE* fp = fopen(path, "w");
-            if (!fp) {
-                ERROR("Failed to fopen %s", path);
-            }
+        if (unregister_binfmt_misc("felix86-i386")) {
+            printf("Unregistered felix86 from binfmt_misc for i386 apps\n");
+        }
 
-            if (fwrite("-1", 1, 2, fp) != 2) {
-                fclose(fp);
-                ERROR("Failed to write -1 to %s", path);
-            }
-
-            fclose(fp);
-        };
-
-        unregister("/proc/sys/fs/binfmt_misc/felix86-x86_64");
-        unregister("/proc/sys/fs/binfmt_misc/felix86-i386");
-
+        g_config.binfmt_misc_installed = false;
+        Config::save(g_config.path(), g_config);
         printf("felix86 successfully unregistered from binfmt_misc\n");
     } else {
+        // Unregister if already registered
+        unregister_binfmt_misc("felix86-x86_64");
+        unregister_binfmt_misc("felix86-i386");
+
         FILE* fp = fopen("/proc/sys/fs/binfmt_misc/register", "w");
 
         if (!fp) {
@@ -181,6 +246,8 @@ void binfmt_misc() {
             ERROR("Failed to register for x86-64");
         }
 
+        fclose(fp);
+
         fp = fopen("/proc/sys/fs/binfmt_misc/register", "w");
 
         if (fwrite(registration_string_i386.c_str(), 1, registration_string_i386.size(), fp) != registration_string_i386.size()) {
@@ -188,7 +255,67 @@ void binfmt_misc() {
             ERROR("Failed to register for i386");
         }
 
-        printf("felix86 successfully registered to binfmt_misc\nTo unregister run `felix86 -b`\n");
+        fclose(fp);
+
+        // /proc/sys/fs stuff makes it temporary, we need to install it here to make it permanent via systemd
+        // Register it in the first available directory in this order
+        std::vector<std::filesystem::path> dirs = {
+            "/etc/binfmt.d",
+            "/usr/lib/binfmt.d",
+            "/usr/local/lib/binfmt.d",
+            "/run/binfmt.d",
+        };
+
+        bool registered = false;
+        for (auto& dir : dirs) {
+            if (std::filesystem::exists(dir)) {
+                {
+                    std::filesystem::path x64path = dir / "felix86-x86_64.conf";
+                    FILE* fp = fopen(x64path.c_str(), "w");
+                    if (!fp) {
+                        ERROR("Failed to open %s", x64path.c_str());
+                    }
+                    if (fwrite(registration_string_x64.c_str(), 1, registration_string_x64.size(), fp) != registration_string_x64.size()) {
+                        fclose(fp);
+                        ERROR("Failed to register in binfmt.d for x86-64");
+                    }
+                    fclose(fp);
+                }
+                {
+                    std::filesystem::path i386path = dir / "felix86-i386.conf";
+                    FILE* fp = fopen(i386path.c_str(), "w");
+                    if (!fp) {
+                        ERROR("Failed to open %s", i386path.c_str());
+                    }
+                    if (fwrite(registration_string_i386.c_str(), 1, registration_string_i386.size(), fp) != registration_string_i386.size()) {
+                        fclose(fp);
+                        ERROR("Failed to register in binfmt.d for i386");
+                    }
+                    fclose(fp);
+                }
+
+                registered = true;
+                break;
+            }
+        }
+
+        if (!registered) {
+            printf("Failed to find a binfmt.d directory to put felix86.conf in\n");
+        }
+
+        unregister_binfmt_misc("qemu-x86_64");
+        unregister_binfmt_misc("qemu-i386");
+
+        g_config.binfmt_misc_installed = true;
+        Config::save(g_config.path(), g_config);
+
+        if (!detect_binfmt_misc()) {
+            printf(ANSI_COLOR_YELLOW
+                   "Even though I installed felix86 in binfmt_misc, I couldn't run a simple binary with it. Either /bin/env is missing in rootfs or "
+                   "there's conflicting emulators in binfmt_misc which may make felix86 not work correctly" ANSI_COLOR_RESET "\n");
+        }
+
+        printf("felix86 successfully registered to binfmt_misc\n");
     }
 }
 
@@ -279,7 +406,12 @@ static error_t parse_opt(int key, char* arg, struct argp_state* state) {
         break;
     }
     case 'b': {
-        binfmt_misc();
+        binfmt_misc(true);
+        exit(0);
+        break;
+    }
+    case 'u': {
+        binfmt_misc(false);
         exit(0);
         break;
     }
@@ -345,6 +477,14 @@ static error_t parse_opt(int key, char* arg, struct argp_state* state) {
 static struct argp argp = {options, parse_opt, args_doc, doc};
 
 int main(int argc, char* argv[]) {
+    if (getenv("__FELIX86_TEST_BINFMT_MISC")) {
+        // This shouldn't be printed as when we run /bin/env in detect_binfmt_misc we mute stdout and stderr
+        WARN("__FELIX86_TEST_BINFMT_MISC was detected, if you see this then something is wrong");
+
+        // Magic value expected by detect_binfmt_misc
+        return 0x42;
+    }
+
 #ifdef __x86_64__
     WARN("You're running an x86-64 executable version of felix86, get ready for a crash soon");
 #endif
@@ -542,6 +682,12 @@ int main(int argc, char* argv[]) {
             ERROR("Executable path is not a regular file");
             return 1;
         }
+    }
+
+    if (!g_config.binfmt_misc_installed && !g_execve_process && check_if_privileged_executable(params.executable_path)) {
+        // Privileged executable but no binfmt_misc support, warn the user
+        WARN("This is a privileged executable but the emulator isn't installed in binfmt_misc, might run into problems. Run `felix86 -b` to install "
+             "it, make sure to remove other x86/x86-64 emulators from binfmt_misc");
     }
 
     SIGLOG("New felix86 instance with PID %d and executable path %s", getpid(), params.executable_path.c_str());

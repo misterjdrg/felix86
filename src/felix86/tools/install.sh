@@ -26,6 +26,11 @@ if [ -z "$HOME" ] || [ ! -d "$HOME" ]; then
     exit 1
 fi
 
+if [ -z "$USER" ]; then
+    echo "\$USER is not set"
+    exit 1
+fi
+
 INSTALLATION_DIR="/opt/felix86"
 FILE="$INSTALLATION_DIR/felix86"
 FELIX86_LINK="https://nightly.link/OFFTKP/felix86/workflows/unit-tests/master/Linux%20executable.zip"
@@ -122,7 +127,13 @@ if [ "$choice" -eq 1 ]; then
     UBUNTU_2404_LINK=$(curl -s https://felix86.com/rootfs/ubuntu.txt)
     echo "Downloading Ubuntu 24.04 rootfs..."
     mkdir -p $NEW_ROOTFS
-    curl -L $UBUNTU_2404_LINK | tar -xmz -C $NEW_ROOTFS
+
+    # Important we untar with --same-owner so that sudo/mount/fusermount keep their setuid bits
+    curl -L $UBUNTU_2404_LINK | sudo tar --same-owner -xz -C $NEW_ROOTFS
+    echo "Changing permissions for $NEW_ROOTFS to $USER"
+
+    # Chown the directory so we can add stuff inside, but not recursively as to not ruin setuid stuff
+    sudo chown "$USER":"$USER" "$NEW_ROOTFS"
     echo "Rootfs was downloaded and extracted in $NEW_ROOTFS"
     felix86 --set-rootfs $NEW_ROOTFS
 elif [ "$choice" -eq 2 ]; then
@@ -131,5 +142,8 @@ elif [ "$choice" -eq 2 ]; then
     read line
     felix86 --set-rootfs $line
 fi
+
+# Finally register felix86 in binfmt_misc
+sudo -E felix86 --binfmt-misc
 
 echo "felix86 installed successfully"
