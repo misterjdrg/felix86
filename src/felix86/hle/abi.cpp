@@ -397,14 +397,14 @@ void GuestToHostMarshaller::emitEpilogue(biscuit::Assembler& as) {
         case 'F': {
             as.FSW(fa0, offsetof(ThreadState, xmm) + 0, Recompiler::threadStatePointer());
             as.SW(x0, offsetof(ThreadState, xmm) + 4, Recompiler::threadStatePointer()); // store 0 into bits 32-63
-            for (int i = 1; i < sizeof(XmmReg) / 8; i++) {
+            for (u32 i = 1; i < sizeof(XmmReg) / 8; i++) {
                 as.SD(x0, offsetof(ThreadState, xmm) + (i * 8), Recompiler::threadStatePointer());
             }
             break;
         }
         case 'D': {
             as.FSD(fa0, offsetof(ThreadState, xmm) + 0, Recompiler::threadStatePointer());
-            for (int i = 1; i < sizeof(XmmReg) / 8; i++) {
+            for (u32 i = 1; i < sizeof(XmmReg) / 8; i++) {
                 as.SD(x0, offsetof(ThreadState, xmm) + (i * 8), Recompiler::threadStatePointer());
             }
             break;
@@ -527,7 +527,7 @@ void* ABIMadness::hostToGuestTrampoline(const char* signature, const void* guest
     {
         int x86_gpr_count = 0;
         int x86_fpr_count = 0;
-        for (int i = 2; i < size; i++) {
+        for (u64 i = 2; i < size; i++) {
             switch (signature[i]) {
             case 'b':
             case 'w':
