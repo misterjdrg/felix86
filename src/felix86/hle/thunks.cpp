@@ -963,7 +963,7 @@ void Thunks::initialize() {
         }
     }
 
-    for (int i = 0; i < sizeof(thunk_metadata) / sizeof(Thunk); i++) {
+    for (u32 i = 0; i < sizeof(thunk_metadata) / sizeof(Thunk); i++) {
         Thunk& metadata = thunk_metadata[i];
         void* ptr = nullptr;
         std::string lib_name = metadata.lib_name;
