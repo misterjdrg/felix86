@@ -236,7 +236,6 @@ std::pair<ExitReason, int> Emulator::Start(const StartParameters& config) {
 
     Elf::PeekResult peek = Elf::Peek(g_params.executable_path);
     std::filesystem::path script_path;
-    bool is_script = false;
     if (peek == Elf::PeekResult::NotElf) {
         Script::PeekResult peek = Script::Peek(g_params.executable_path);
         if (peek == Script::PeekResult::Script) {
@@ -247,7 +246,6 @@ std::pair<ExitReason, int> Emulator::Start(const StartParameters& config) {
             }
             g_params.argv[0] = path;
 
-            is_script = true;
             Script script(g_params.executable_path);
             script_path = g_params.executable_path;
             const std::filesystem::path& interpreter = script.GetInterpreter();
@@ -315,30 +313,10 @@ std::pair<ExitReason, int> Emulator::Start(const StartParameters& config) {
 
     BRK::allocate();
 
-    // Only set the CWD for the initial process, don't change it around when new ones come by with execve
     if (!g_execve_process) {
-        const char* cwd = getenv("FELIX86_CWD");
-
-        if (cwd) {
-            std::string scwd = cwd;
-            ASSERT_MSG(scwd.find(g_config.rootfs_path.string()) == 0, "FELIX86_CWD is not inside FELIX86_ROOTFS!");
-            int res = chdir(cwd);
-            if (res == -1) {
-                WARN("Failed to chdir to %s", cwd);
-            }
-        } else {
-            int res;
-            if (is_script) {
-                // executable_path here is the shell itself, parent path would be /usr/bin, we wanna be where the script is
-                res = chdir(script_path.parent_path().c_str());
-            } else {
-                res = chdir(g_params.executable_path.parent_path().c_str());
-            }
-
-            if (res == -1) {
-                WARN("Failed to chdir to %s", g_params.executable_path.parent_path().c_str());
-            }
-        }
+        // Go inside the rootfs
+        ASSERT(g_rootfs_fd > 0);
+        ASSERT(fchdir(g_rootfs_fd) == 0);
     }
 
     ThreadState* main_state = ThreadState::Create(nullptr);
