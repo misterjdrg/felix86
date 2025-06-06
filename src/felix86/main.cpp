@@ -584,12 +584,11 @@ int main(int argc, char* argv[]) {
 
     Signals::initialize();
 
-    if (is_subpath(params.argv[0], g_config.rootfs_path)) {
-        params.argv[0] = params.argv[0].substr(g_config.rootfs_path.string().size());
-        ASSERT(!params.argv[0].empty());
-        if (params.argv[0].at(0) != '/') {
-            params.argv[0] = '/' + params.argv[0];
-        }
+    const char* argv0_original = getenv("__FELIX86_ARGV0");
+    if (argv0_original) {
+        params.argv[0] = argv0_original;
+    } else {
+        ASSERT(!g_execve_process);
     }
 
     std::string args = "Arguments: ";
