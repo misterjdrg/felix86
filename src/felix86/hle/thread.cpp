@@ -229,8 +229,7 @@ long ForkMe(CloneArgs& host_clone_args) {
             state->gprs[X86_REF_RSP] = host_clone_args.new_rsp;
         }
 
-        if (host_clone_args.new_tls) {
-            ASSERT(host_clone_args.guest_flags & CLONE_SETTLS);
+        if (host_clone_args.guest_flags & CLONE_SETTLS) {
             state->SetTLS(host_clone_args.new_tls);
         }
 
@@ -274,7 +273,7 @@ long VForkMe(CloneArgs& args) {
 
         state->tid = gettid();
 
-        if (args.new_tls) {
+        if (args.guest_flags & CLONE_SETTLS) {
             WARN("vfork giving us new TLS?");
             state->SetTLS(args.new_tls);
         }
@@ -319,7 +318,8 @@ long Threads::Clone(ThreadState* current_state, CloneArgs* args) {
     }
 
     u64 allowed_flags = CLONE_VM | CLONE_THREAD | CLONE_DETACHED | CLONE_SYSVSEM | CLONE_CHILD_CLEARTID | CLONE_CHILD_SETTID | CLONE_SIGHAND |
-                        CLONE_FILES | CLONE_FS | CLONE_IO | CLONE_SETTLS | CLONE_PARENT_SETTID | CLONE_VFORK | CLONE_UNTRACED;
+                        CLONE_FILES | CLONE_FS | CLONE_IO | CLONE_SETTLS | CLONE_PARENT_SETTID | CLONE_VFORK | CLONE_UNTRACED | CLONE_NEWNS |
+                        CLONE_NEWUSER;
     if ((args->guest_flags & ~CSIGNAL) & ~allowed_flags) {
         ERROR("Unsupported flags %s", sflags.c_str());
         return -ENOSYS;

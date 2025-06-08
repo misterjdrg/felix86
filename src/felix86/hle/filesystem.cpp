@@ -366,9 +366,18 @@ int Filesystem::Rmdir(const char* dir) {
 }
 
 int Filesystem::Mount(const char* source, const char* target, const char* fstype, u64 flags, const void* data) {
-    std::filesystem::path rsource = resolve(source);
-    std::filesystem::path rtarget = resolve(target);
-    return ::mount(rsource.c_str(), rtarget.c_str(), fstype, flags, data);
+    const char* sptr = nullptr;
+    const char* tptr = nullptr;
+    std::filesystem::path rsource, rtarget;
+    if (source) {
+        rsource = resolve(source);
+        sptr = rsource.c_str();
+    }
+    if (target) {
+        rtarget = resolve(target);
+        tptr = rtarget.c_str();
+    }
+    return ::mount(sptr, tptr, fstype, flags, data);
 }
 
 int Filesystem::INotifyAddWatch(int fd, const char* path, u32 mask) {
@@ -534,7 +543,10 @@ std::pair<int, const char*> Filesystem::resolve(int fd, const char* path) {
 }
 
 std::filesystem::path Filesystem::resolve(const char* path) {
-    ASSERT(path);
+    if (!path) {
+        WARN("Filesystem::resolve with null path");
+        return "";
+    }
 
     if (isProcSelfExe(path)) {
         return g_fs->GetExecutablePath();
