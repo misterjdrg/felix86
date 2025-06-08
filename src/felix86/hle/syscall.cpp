@@ -1183,6 +1183,10 @@ Result felix86_syscall_common(felix86_frame* frame, int rv_syscall, u64 arg1, u6
         result = SYSCALL(wait4, arg1, arg2, arg3, arg4, arg5, arg6);
         break;
     }
+    case felix86_riscv64_waitid: {
+        result = SYSCALL(waitid, arg1, arg2, arg3, arg4, arg5);
+        break;
+    }
     case felix86_riscv64_fchownat: {
         result = SYSCALL(fchownat, arg1, arg2, arg3, arg4, arg5, arg6);
         break;
@@ -2159,6 +2163,11 @@ void felix86_syscall32(felix86_frame* frame, u32 rip_next) {
             if (result >= 0) {
                 *(x86_stat64*)arg2 = host_stat;
             }
+            break;
+        }
+        case felix86_x86_32_getdents: {
+            WARN("This program uses getdents");
+            result = -ENOSYS;
             break;
         }
         case felix86_x86_32_getdents64: {
