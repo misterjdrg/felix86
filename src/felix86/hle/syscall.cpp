@@ -248,6 +248,10 @@ Result felix86_syscall_common(felix86_frame* frame, int rv_syscall, u64 arg1, u6
         result = SYSCALL(close_range, arg1, arg2, arg3);
         break;
     }
+    case felix86_riscv64_copy_file_range: {
+        result = SYSCALL(copy_file_range, arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+    }
     case felix86_riscv64_shutdown: {
         result = SYSCALL(shutdown, arg1, arg2, arg3, arg4, arg5, arg6);
         break;
@@ -258,7 +262,7 @@ Result felix86_syscall_common(felix86_frame* frame, int rv_syscall, u64 arg1, u6
     }
     case felix86_riscv64_shmat: {
         result = SYSCALL(shmat, arg1, arg2, arg3);
-        if (result > mmap_min_addr() && result < UINT32_MAX) {
+        if (result >= 0 && ((u64)result) > mmap_min_addr() && result < UINT32_MAX) {
             WARN("shmat in 32-bit address space, this could cause problems with MAP_32BIT");
         }
         break;
@@ -2395,7 +2399,7 @@ void felix86_syscall32(felix86_frame* frame, u32 rip_next) {
                 u64 val = *ptr;
                 u32 size = sigset->size;
                 ASSERT(size <= 8);
-                for (int i = 0; i < size * 8; i++) {
+                for (u32 i = 0; i < size * 8; i++) {
                     if (val & (1ull << i)) {
                         sigaddset(&host_sigset, i + 1);
                     }
